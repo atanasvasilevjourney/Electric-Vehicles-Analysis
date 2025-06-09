@@ -1,0 +1,167 @@
+--Vehicle Age
+
+WITH Vehicle_age AS (
+    SELECT
+        "Model Year","Model",
+        EXTRACT(YEAR FROM CURRENT_DATE) - "Model Year" AS VehicleAge
+    FROM
+      electric_vehicles
+    ORDER BY VehicleAge DESC
+    
+)  
+SELECT
+    *
+FROM
+    Vehicle_age
+
+
+----Luxury Indicator.
+
+SELECT MAX("Base MSRP")
+FROM electric_vehicles
+
+SELECT 
+  "Model",
+  "Make",
+  "Model Year",
+  CASE
+      when "Base MSRP" < 40000 then 'Affordable'
+      when "Base MSRP" >= 40000 AND "Base MSRP" < 60000 then 'Mid-Range'
+      when "Base MSRP" >= 60000 AND "Base MSRP" < 845000 then 'Luxury'
+      ELSE 'Uknown'
+  END AS "Luxury Indicator"
+FROM electric_vehicles
+WHERE "Base MSRP" > 0
+
+--Range Category - Short / Mid / Long
+select
+  "Model",
+  "Make",
+  "Model Year",
+  case
+    when "Electric Range" < 150 then 'Short'
+    when "Electric Range" >= 150
+    and "Electric Range" < 250 then 'Mid'
+    when "Electric Range" >= 250 then 'Long'
+    else 'Unknown'
+  end as "Range Category"
+from
+  electric_vehicles
+
+
+--Is Clean Fuel Eligible
+
+SELECT 
+"Model",
+  "Make",
+  "Model Year",
+  CASE 
+      WHEN "Clean Alternative Fuel Vehicle (CAFV) Eligibility" = 'Clean Alternative Fuel Vehicle Eligible' THEN 'TRUE'
+      WHEN "Clean Alternative Fuel Vehicle (CAFV) Eligibility" = 'Not eligible due to low battery range' THEN 'FALSE'
+      WHEN "Clean Alternative Fuel Vehicle (CAFV) Eligibility" = 'Eligibility unknown as battery range has not been researched' THEN 'Undefined'
+      ELSE 'Unknown'
+  END AS "Is Clean Fuel Eligible"
+FROM electric_vehicles
+
+--Registration Area
+
+SELECT "City",
+  "County",
+CONCAT("City" , ' ', "County") AS "Registration Area"
+FROM electric_vehicles
+
+--Price Category - Affordable / Mid-Range / Luxury
+
+SELECT
+    "Model", "Make", "Model Year","Base MSRP",
+    CASE
+        WHEN NTILE(3) OVER (ORDER BY "Base MSRP") = 1 THEN 'Low Price'
+        WHEN NTILE(3) OVER (ORDER BY "Base MSRP") = 2 THEN 'Medium Price'
+        WHEN NTILE(3) OVER (ORDER BY "Base MSRP") = 3 THEN 'High Price'
+        ELSE 'Unknown' 
+    END AS Price_Category 
+FROM
+    electric_vehicles
+WHERE "Base MSRP" > 0
+ORDER BY
+    "Base MSRP" DESC
+
+SELECT
+    "Model", "Make", "Model Year","Base MSRP",
+    ROUND(("Electric Range" * 1.0 / "Base MSRP")::numeric, 6) AS range_to_price_ratio
+FROM
+    electric_vehicles
+WHERE
+    "Base MSRP" > 0 AND "Electric Range" > 0
+ORDER BY
+    "Base MSRP" 
+
+
+-- Average "Base MSRP"
+
+SELECT AVG("Base MSRP") AS AverageMSRP
+FROM electric_vehicles
+WHERE "Base MSRP" IS NOT null
+AND "Base MSRP" > 0
+
+-- Average Electric Range
+SELECT 
+    AVG("Electric Range") AS AverageElectricRange
+FROM electric_vehicles
+WHERE "Electric Range" IS NOT NULL 
+    AND "Electric Range" > 0;
+
+
+-- Percentage Clean Fuel Eligible %
+
+SELECT 
+    (SUM(CASE WHEN "Clean Alternative Fuel Vehicle (CAFV) Eligibility" = 'Clean Alternative Fuel Vehicle Eligible' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) AS Clean_Fuel_Eligible_Percentage
+FROM electric_vehicles
+
+--Luxury EV Share
+WITH Luxury_EV_Share_Data AS (
+  SELECT ROUND(1.0 * SUM(
+                         CASE
+                         WHEN "Base MSRP" >= 80000
+                         THEN 1 ELSE 0 END
+          ) / COUNT(*), 4
+    ) AS "Luxury Share (Decimal)"
+FROM
+    electric_vehicles
+WHERE
+    "Base MSRP" IS NOT NULL AND "Base MSRP">0
+)
+ 
+SELECT * from Luxury_EV_Share_Data;
+
+
+
+
+--Range by Price Category
+WITH Range_byPriceCategory_Data AS (
+ SELECT
+    CASE
+        WHEN "Base MSRP" >= 80000 THEN 'Luxury'
+        WHEN "Base MSRP" >= 40000 THEN 'Mid-Range'
+        WHEN "Base MSRP" > 0 THEN 'Affordable'
+        END AS "Price Segment",   
+    ROUND(CAST(AVG("Electric Range") AS NUMERIC), 2) AS "Avg Electric Range" 
+FROM
+    electric_vehicles 
+WHERE
+    "Base MSRP" > 0 
+    AND "Base MSRP" > 0 
+GROUP BY
+    CASE
+            WHEN "Base MSRP" >= 80000 THEN 'Luxury'
+            WHEN "Base MSRP" >= 40000 THEN 'Mid-Range'
+            WHEN "Base MSRP" > 0 THEN 'Affordable'
+            END           
+ORDER BY
+    CASE
+            WHEN "Base MSRP" >= 80000 THEN 'Luxury'
+            WHEN "Base MSRP" >= 40000 THEN 'Mid-Range'
+            WHEN "Base MSRP" > 0 THEN 'Affordable'
+            END
+) 
+SELECT * from Range_byPriceCategory_Data
